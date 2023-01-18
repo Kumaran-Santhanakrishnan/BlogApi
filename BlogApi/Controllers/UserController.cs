@@ -6,7 +6,10 @@ using Microsoft.AspNetCore.Mvc;
 using BlogApi.Models;
 using BlogApi.Services;
 using BlogApi.Config;
+using BlogApi.Exceptions;
 using MySqlConnector;
+using System.Text.RegularExpressions;
+using Xunit;
 
 // For more information on enabling Web API for empty projects, visit https://go.microsoft.com/fwlink/?LinkID=397860
 
@@ -25,58 +28,68 @@ namespace BlogApi.Controllers
         [HttpGet]
         public async Task<ActionResult<List<User>>> GetAllUsers()
         {
-            List<User> users = userService.getAllUsers().Result;
+            if (Request.Headers["Authorization"].ToString() != String.Empty)
+            {
+                string bearerToken = Request.Headers["Authorization"];
 
+                var token = bearerToken.Split(" ")[1];
+                Console.WriteLine("------ Token: " + token);
 
-            return Ok(users);
+                List<User> users = userService.getAllUsers();
+
+                return Ok(users);
+            }
+            return Unauthorized("Unauthorized User!");
+            
         }
 
 
         [HttpPost]
         public async Task<ActionResult<User>> Register(UserDTO user)
         {
-            if (user.Name == null || user.Password == null || user.Email == null)
+            
+
+            try
             {
-                return BadRequest();
+                User registeredUser = await userService.Register(user);
+                //if (registeredUser == null) return BadRequest
+                return Ok(registeredUser);
             }
-
-            User registeredUser = await userService.Register(user);
-            if (registeredUser == null) return BadRequest();
-
-            return Ok(registeredUser); 
+            catch(AuthenticationException e)
+            {
+                return BadRequest(e.Message);
+            }
+            catch(DatabaseException e)
+            {
+                return 
+            }
+            catch(Exception e)
+            {
+                return this.StatusCode(500);
+            }
+            
+             
         }
 
         [HttpPost("login")]
         public async Task<ActionResult<string>> Login(UserDTO userDTO)
         {
-            var token = userService.Login(userDTO);
-
-            var refreshToken = userService.GenerateRefreshToken();
-            SetRefreshToken(refreshToken);
-            /*
-                Use CustomException
-             */
-            return Ok(token);
-        }
-
-        private void SetRefreshToken(RefreshToken newRefreshToken)
-        {
-            //user.RefreshToken = newRefreshToken.Token;
-            //user.TokenCreated = newRefreshToken.Created;
-            //user.TokenExpires = newRefreshToken.Expires;
-
-
-
-            var cookieOptions = new CookieOptions
+            try
             {
-                HttpOnly = true,
-                Expires = newRefreshToken.Expires
-            };
-            Response.Cookies.Append("refreshToken", newRefreshToken.Token, cookieOptions);
-
-
+                var token = userService.Login(userDTO,Response);
+                return Ok(token);
+            }
+            catch(Exception e)
+            {
+                return Unauthorized(e.Message);
+            }
             
         }
+
+
+        
+
+
     }
 }
 

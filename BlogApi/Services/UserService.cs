@@ -1,6 +1,7 @@
 ﻿using System;
 using BlogApi.Config;
 using BlogApi.Models;
+using BlogApi.Exceptions;
 using MySqlConnector;
 using System.Security.Cryptography;
 using static System.Net.Mime.MediaTypeNames;
@@ -15,6 +16,7 @@ using Microsoft.AspNetCore.Mvc;
 using System.Security.Claims;
 using System.Security.Cryptography;
 using Microsoft.IdentityModel.Tokens;
+using System.Text.RegularExpressions;
 
 namespace BlogApi.Services
 {
@@ -30,22 +32,20 @@ namespace BlogApi.Services
             Configuration = configuration;
 		}
 
-		public async Task<List<User>> getAllUsers()
+        public UserService() { }
+
+		public List<User> getAllUsers()
 		{
             List<User> users = new List<User>();
             MySqlConnection connection = dbFactory.getConnection();
 
-           
-            if(connection.State != System.Data.ConnectionState.Open) connection.Open();
-
+            if (connection.State != System.Data.ConnectionState.Open) connection.Open();
 
             MySqlCommand command = new MySqlCommand("SELECT * FROM USER;", connection);
 
-            var result = await command.ExecuteReaderAsync();
+            var result =  command.ExecuteReader();
 
-
-
-            while (await result.ReadAsync())
+            while (result.Read())
             {
                 users.Add(new User
                 {
@@ -64,6 +64,22 @@ namespace BlogApi.Services
 
         public async Task<User> Register(UserDTO userDTO)
         {
+            if (userDTO.Email == null || userDTO.Name == null || userDTO.Password == null) throw new AuthenticationException("Missing Credentials");
+
+            Regex regex = new Regex(@"^([\w\.\-]+)@([\w\-]+)((\.(\w){2,3})+)$");
+            Match match = regex.Match(userDTO.Email);
+
+            if (!match.Success) throw new AuthenticationException("Ivalid Email!");
+
+            if (userDTO.Password.Length < 8) throw new AuthenticationException("Password must be atleast 8 characters!");
+
+            regex = new Regex("^(?=.*?[A-Z])(?=.*?[a-z])(?=.*?[0-9])(?=.*?[#?!@$%^&*-]).{8,}$");
+            match = regex.Match(userDTO.Password);
+
+            if (!match.Success) throw new AuthenticationException("Ivalid Password! Password must contain atleast one uppercase character , one lowercase character , one digit and one special character!");
+
+
+
             MySqlConnection connection = dbFactory.getConnection();
             if (connection.State != System.Data.ConnectionState.Open) connection.Open();
 
@@ -72,7 +88,7 @@ namespace BlogApi.Services
             command.Parameters.Add(email);
             var result = (Int64) command.ExecuteScalar();
 
-            if (result > 0) return null;
+            if (result > 0) throw new DatabaseException("User with email already exists!");
 
             User user = new User();
             user.Id = Guid.NewGuid().ToString();
@@ -89,7 +105,8 @@ namespace BlogApi.Services
 
             if (command.ExecuteNonQuery() != 1)
             {
-                return null;
+                connection.Close();
+                throw new DatabaseException("Unable to create user!");
             }
 
             command = new MySqlCommand("INSERT INTO AUTH (UserId,Password) VALUES (@Id,@Password);",connection);
@@ -104,14 +121,15 @@ namespace BlogApi.Services
             if (command.ExecuteNonQuery() != 1)
             {
                 Console.WriteLine("Problem writing to Auth table");
-                return null;
+                connection.Close();
+                throw new DatabaseException("Unable to create user!");
             }
-
+            connection.Close();
             return user;
         }
 
         
-        public string Login(UserDTO userDTO)
+        public string Login(UserDTO userDTO,HttpResponse Response)
         {
             MySqlConnection connection = dbFactory.getConnection();
             if (connection.State != System.Data.ConnectionState.Open) connection.Open();
@@ -125,11 +143,15 @@ namespace BlogApi.Services
             if (reader.Read())
             {
                 string userId = reader.GetString("Id");
+                connection.Close();
+
+                connection.Open();
                 command = new MySqlCommand("SELECT Password FROM Auth WHERE UserId=@Id;", connection);
                 MySqlParameter Id = new MySqlParameter("@Id", userId);
                 command.Parameters.Add(Id);
 
-                reader = command.ExecuteReader();
+                reader = command.ExecuteReader(); ;
+                reader.Read();
 
                 string passoword = reader.GetString("Password");
 
@@ -137,14 +159,19 @@ namespace BlogApi.Services
                 {
                     string token = CreateToken(userDTO);
                     var refreshToken = GenerateRefreshToken();
+
+                    
+                    SetRefreshToken(refreshToken, Response);
+                    connection.Close();
                     return token;
                 }
-                return null;
-
+                connection.Close();
+                throw new Exception("Wrong Password!");
             }
             else
             {
-                return null;
+                connection.Close();
+                throw new Exception("User not found!");
             }
             
         }
@@ -153,7 +180,7 @@ namespace BlogApi.Services
         {
             List<Claim> claims = new List<Claim>
             {
-                new Claim(ClaimTypes.Name, userDTO.Email),
+                new Claim(ClaimTypes.Email, userDTO.Email),
                 new Claim(ClaimTypes.Role, "Admin")
             };
 
@@ -184,15 +211,19 @@ namespace BlogApi.Services
             return refreshToken;
         }
 
-        public Boolean SetRefreshToken(RefreshToken refreshToken)
+        private void SetRefreshToken(RefreshToken newRefreshToken, HttpResponse Response)
         {
-            MySqlConnection connection = dbFactory.getConnection();
-            if (connection.State != System.Data.ConnectionState.Open) connection.Open();
+            //user.RefreshToken = newRefreshToken.Token;
+            //user.TokenCreated = newRefreshToken.Created;
+            //user.TokenExpires = newRefreshToken.Expires;
 
-            MySqlCommand command = new MySqlCommand("INSERT INTO AuthToken (Token,UserId,CreatedAt,Validity) VALUES (@Token,@UserId,@CreatedAt,@Validity);", connection);
-            MySqlParameter email = new MySqlParameter("@Email", userDTO.Email);
+            var cookieOptions = new CookieOptions
+            {
+                HttpOnly = true,
+                Expires = newRefreshToken.Expires
+            };
+            Response.Cookies.Append("refreshToken", newRefreshToken.Token, cookieOptions);
 
-            return true;
         }
 
         private string hashPassword(string password)
