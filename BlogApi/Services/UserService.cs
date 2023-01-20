@@ -74,15 +74,17 @@ namespace BlogApi.Services
             var reader = command.ExecuteReader();
             if (reader.Read())
             {
-                return new User()
+                User user = new User()
                 {
                     Id = reader.GetString("Id"),
                     Mail = reader.GetString("Email"),
                     Name = reader.GetString("Name")
                 };
+                connection.Close();
+                return user;
             }
-            
 
+            connection.Close();
             return null;
         }
 
@@ -188,7 +190,7 @@ namespace BlogApi.Services
                 //connection.Close();
 
                 //connection.Open();
-                command = new MySqlCommand("SELECT Password FROM Auth WHERE UserId=@Id;", connection);
+                command = new MySqlCommand("SELECT (Password,Salt) FROM Auth WHERE UserId=@Id;", connection);
                 MySqlParameter Id = new MySqlParameter("@Id", userId);
                 command.Parameters.Add(Id);
 
@@ -196,8 +198,9 @@ namespace BlogApi.Services
                 reader.Read();
 
                 string passoword = reader.GetString("Password");
+                string salt = reader.GetString("Salt");
 
-                if (passoword.Equals(hashPassword(userDTO.Password)))
+                if (passoword.Equals(hashPassword(userDTO.Password,salt)))
                 {
                     string token = CreateToken(userDTO);
                     var refreshToken = GenerateRefreshToken();

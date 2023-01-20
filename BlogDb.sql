@@ -21,4 +21,8 @@ create table if not exists Post (PostId varchar(100),
     createdAt DateTime DEFAULT current_timestamp,
     isPublic bool,
     primary key(PostId));
+
+ALTER TABLE auth
+	ADD COLUMN Salt TEXT AFTER Password;
     
+
