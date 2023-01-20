@@ -17,12 +17,12 @@ using System.Security.Claims;
 using System.Security.Cryptography;
 using Microsoft.IdentityModel.Tokens;
 using System.Text.RegularExpressions;
+using Org.BouncyCastle.Asn1.Ocsp;
 
 namespace BlogApi.Services
 {
 	public class UserService
 	{
-        public readonly UserService _userservice;
         private readonly DbFactory dbFactory;
         private readonly IConfiguration Configuration;
 
@@ -60,6 +60,30 @@ namespace BlogApi.Services
 
             return users;
 
+        }
+
+        public User? GetUserById(string Id)
+        {
+            if (Id == String.Empty) return null;
+
+            MySqlConnection connection = dbFactory.getConnection();
+            if (connection.State != System.Data.ConnectionState.Open) connection.Open();
+
+            MySqlCommand command = new MySqlCommand("SELECT * FROM USER WHERE Id=@Id;", connection);
+            command.Parameters.Add(new MySqlParameter("@Id", Id));
+            var reader = command.ExecuteReader();
+            if (reader.Read())
+            {
+                return new User()
+                {
+                    Id = reader.GetString("Id"),
+                    Mail = reader.GetString("Email"),
+                    Name = reader.GetString("Name")
+                };
+            }
+            
+
+            return null;
         }
 
         public async Task<User> Register(UserDTO userDTO)
@@ -109,14 +133,18 @@ namespace BlogApi.Services
                 throw new DatabaseException("Unable to create user!");
             }
 
-            command = new MySqlCommand("INSERT INTO AUTH (UserId,Password) VALUES (@Id,@Password);",connection);
+            command = new MySqlCommand("INSERT INTO AUTH (UserId,Password,Salt) VALUES (@Id,@Password,@Salt);",connection);
 
-
-            string hashedPassword = hashPassword(userDTO.Password);
+            string salt = generateSalt();
+            string hashedPassword = hashPassword(userDTO.Password,salt);
             Console.WriteLine("hashed password : "+hashedPassword);
-            MySqlParameter password = new MySqlParameter("@Password", hashedPassword);
-            command.Parameters.Add(Id);
-            command.Parameters.Add(password);
+            command.Parameters.AddRange(new[] {
+                Id,
+                new MySqlParameter("@Password", hashedPassword),
+                new MySqlParameter("@Salt",salt)
+            });
+            
+            
 
             if (command.ExecuteNonQuery() != 1)
             {
@@ -131,6 +159,20 @@ namespace BlogApi.Services
         
         public string Login(UserDTO userDTO,HttpResponse Response)
         {
+            if (userDTO.Email == null || userDTO.Password == null) throw new AuthenticationException("Missing Credentials");
+
+            Regex regex = new Regex(@"^([\w\.\-]+)@([\w\-]+)((\.(\w){2,3})+)$");
+            Match match = regex.Match(userDTO.Email);
+
+            if (!match.Success) throw new AuthenticationException("Ivalid Email!");
+
+            if (userDTO.Password.Length < 8) throw new AuthenticationException("Password must be atleast 8 characters!");
+
+            regex = new Regex("^(?=.*?[A-Z])(?=.*?[a-z])(?=.*?[0-9])(?=.*?[#?!@$%^&*-]).{8,}$");
+            match = regex.Match(userDTO.Password);
+
+            if (!match.Success) throw new AuthenticationException("Ivalid Password! Password must contain atleast one uppercase character , one lowercase character , one digit and one special character!");
+
             MySqlConnection connection = dbFactory.getConnection();
             if (connection.State != System.Data.ConnectionState.Open) connection.Open();
 
@@ -143,9 +185,9 @@ namespace BlogApi.Services
             if (reader.Read())
             {
                 string userId = reader.GetString("Id");
-                connection.Close();
+                //connection.Close();
 
-                connection.Open();
+                //connection.Open();
                 command = new MySqlCommand("SELECT Password FROM Auth WHERE UserId=@Id;", connection);
                 MySqlParameter Id = new MySqlParameter("@Id", userId);
                 command.Parameters.Add(Id);
@@ -166,12 +208,12 @@ namespace BlogApi.Services
                     return token;
                 }
                 connection.Close();
-                throw new Exception("Wrong Password!");
+                throw new AuthenticationException("Wrong Password!");
             }
             else
             {
                 connection.Close();
-                throw new Exception("User not found!");
+                throw new DatabaseException("User not found!");
             }
             
         }
@@ -226,13 +268,31 @@ namespace BlogApi.Services
 
         }
 
-        private string hashPassword(string password)
+        public bool ValidateUser(string token)
+        {
+            if (token == String.Empty) return false;
+            
+            var bearertoken = token.Split(" ")[1];
+
+            // TODO : implement verification logic
+
+            return true;
+            
+        }
+
+        private string hashPassword(string password,string salt)
         {
             var sha = new System.Security.Cryptography.SHA256Managed();
-            string salt = "temporary_salt";
             byte[] textbytes = System.Text.Encoding.UTF8.GetBytes(password + salt);
-
             return Encoding.Default.GetString(sha.ComputeHash(textbytes));
+        }
+
+        private string generateSalt()
+        {
+            Random random = new Random();
+            const string chars = "ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789";
+            return new string(Enumerable.Repeat(chars, (int)random.NextInt64(10,15))
+                .Select(s => s[random.Next(s.Length)]).ToArray());
         }
 
 

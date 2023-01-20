@@ -12,6 +12,7 @@ builder.Services.AddControllers();
 //builder.Services.AddSwaggerGen();
 
 builder.Services.AddScoped<UserService>();
+builder.Services.AddScoped<PostService>();
 builder.Services.AddScoped<DbFactory>();
 
 var app = builder.Build();

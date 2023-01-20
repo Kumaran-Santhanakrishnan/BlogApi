@@ -3,14 +3,18 @@ namespace BlogApi.Models
 {
 	public class Blog
 	{
-		private Guid id { get; set; }
-		private Guid authorId { get; set; }
-		private String content { get; set; }
-		private DateTime createdTime { get; set; }
-		private bool isPublic { get; set; }
+		public string id { get; set; }
+        public string authorId { get; set; }
+		public String content { get; set; }
+		public DateTime createdTime { get; set; }
+		public bool isPublic { get; set; }
 
 		public Blog() { }
+
+
 	}
+
+
 
 	
 }

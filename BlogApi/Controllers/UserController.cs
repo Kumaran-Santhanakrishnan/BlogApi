@@ -28,15 +28,9 @@ namespace BlogApi.Controllers
         [HttpGet]
         public async Task<ActionResult<List<User>>> GetAllUsers()
         {
-            if (Request.Headers["Authorization"].ToString() != String.Empty)
+            if (userService.ValidateUser(Request.Headers["Authorization"].ToString()))
             {
-                string bearerToken = Request.Headers["Authorization"];
-
-                var token = bearerToken.Split(" ")[1];
-                Console.WriteLine("------ Token: " + token);
-
                 List<User> users = userService.getAllUsers();
-
                 return Ok(users);
             }
             return Unauthorized("Unauthorized User!");
@@ -61,21 +55,19 @@ namespace BlogApi.Controllers
             }
             catch(DatabaseException e)
             {
-                return 
+                return this.StatusCode(500, e.Message);
             }
             catch(Exception e)
             {
                 return this.StatusCode(500);
             }
             
-             
         }
 
         [HttpPost("login")]
         public async Task<ActionResult<string>> Login(UserDTO userDTO)
         {
-            try
-            {
+            try{
                 var token = userService.Login(userDTO,Response);
                 return Ok(token);
             }
@@ -83,11 +75,8 @@ namespace BlogApi.Controllers
             {
                 return Unauthorized(e.Message);
             }
-            
         }
 
-
-        
 
 
     }
