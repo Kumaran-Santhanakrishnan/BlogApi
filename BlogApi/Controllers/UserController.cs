@@ -28,7 +28,7 @@ namespace BlogApi.Controllers
         [HttpGet]
         public async Task<ActionResult<List<User>>> GetAllUsers()
         {
-            if (userService.ValidateUser(Request.Headers["Authorization"].ToString()))
+            if (userService.ValidateUser(Request.Headers["Authorization"].ToString()) != null)
             {
                 List<User> users = userService.getAllUsers();
                 return Ok(users);
@@ -36,7 +36,6 @@ namespace BlogApi.Controllers
             return Unauthorized("Unauthorized User!");
             
         }
-
 
         [HttpPost]
         public async Task<ActionResult<User>> Register(UserDTO user)
@@ -73,6 +72,7 @@ namespace BlogApi.Controllers
             }
             catch(Exception e)
             {
+                Console.WriteLine(e.StackTrace);
                 return Unauthorized(e.Message);
             }
         }

@@ -173,7 +173,7 @@ namespace BlogApi.Services
             regex = new Regex("^(?=.*?[A-Z])(?=.*?[a-z])(?=.*?[0-9])(?=.*?[#?!@$%^&*-]).{8,}$");
             match = regex.Match(userDTO.Password);
 
-            if (!match.Success) throw new AuthenticationException("Ivalid Password! Password must contain atleast one uppercase character , one lowercase character , one digit and one special character!");
+            //if (!match.Success) throw new AuthenticationException("Ivalid Password! Password must contain atleast one uppercase character , one lowercase character , one digit and one special character!");
 
             MySqlConnection connection = dbFactory.getConnection();
             if (connection.State != System.Data.ConnectionState.Open) connection.Open();
@@ -187,14 +187,14 @@ namespace BlogApi.Services
             if (reader.Read())
             {
                 string userId = reader.GetString("Id");
-                //connection.Close();
+                connection.Close();
 
-                //connection.Open();
-                command = new MySqlCommand("SELECT (Password,Salt) FROM Auth WHERE UserId=@Id;", connection);
+                connection.Open();
+                command = new MySqlCommand("SELECT Password,Salt FROM Auth WHERE UserId=@Id;", connection);
                 MySqlParameter Id = new MySqlParameter("@Id", userId);
                 command.Parameters.Add(Id);
 
-                reader = command.ExecuteReader(); ;
+                reader = command.ExecuteReader();
                 reader.Read();
 
                 string passoword = reader.GetString("Password");
@@ -202,7 +202,7 @@ namespace BlogApi.Services
 
                 if (passoword.Equals(hashPassword(userDTO.Password,salt)))
                 {
-                    string token = CreateToken(userDTO);
+                    string token = CreateToken(userDTO,userId);
                     var refreshToken = GenerateRefreshToken();
 
                     
@@ -221,11 +221,12 @@ namespace BlogApi.Services
             
         }
 
-        private string CreateToken(UserDTO userDTO)
+        private string CreateToken(UserDTO userDTO,string userId)
         {
             List<Claim> claims = new List<Claim>
             {
                 new Claim(ClaimTypes.Email, userDTO.Email),
+                new Claim(ClaimTypes.Sid,userId),
                 new Claim(ClaimTypes.Role, "Admin")
             };
 
@@ -271,15 +272,39 @@ namespace BlogApi.Services
 
         }
 
-        public bool ValidateUser(string token)
+        public string ValidateUser(string token)
         {
-            if (token == String.Empty) return false;
-            
-            var bearertoken = token.Split(" ")[1];
+            if (token == null)
+            {
+                return null;
+            }
+            token = token.Split(" ")[1];
+            var tokenHandler = new JwtSecurityTokenHandler();
+            var key = Encoding.ASCII.GetBytes(Configuration.GetSection("Jwt:Key").Value);
+            try
+            {
+                tokenHandler.ValidateToken(token, new TokenValidationParameters
+                {
+                    ValidateIssuerSigningKey = true,
+                    IssuerSigningKey = new SymmetricSecurityKey(key),
+                    ValidateIssuer = false,
+                    ValidateAudience = false,
+                    // set clockskew to zero so tokens expire exactly at token expiration time (instead of 5 minutes later)
+                    ClockSkew = TimeSpan.Zero
+                }, out SecurityToken validatedToken);
 
-            // TODO : implement verification logic
+                var jwtToken = (JwtSecurityToken)validatedToken;
+                //var userId = int.Parse(jwtToken.Claims.First(x => x.Type == "id").Value);
+                var id = jwtToken.Claims.First(x => x.Type == ClaimTypes.Sid).Value;
 
-            return true;
+                // return user id from JWT token if validation successful
+                return id;
+            }
+            catch
+            {
+                // return null if validation fails
+                return null;
+            }
             
         }
 

@@ -26,18 +26,19 @@ namespace BlogApi.Controllers
         [HttpGet]
         public async Task<ActionResult<List<Blog>>> GetAllPosts()
         {
-            if (userService.ValidateUser(Request.Headers["Authorization"].ToString()))
-            {
-                List<Blog> posts = postService.getAllPosts();
-                return Ok(posts);
-            }
-            return Unauthorized("Unauthorized User!");
+            if (userService.ValidateUser(Request.Headers["Authorization"].ToString())==null)
+                return Unauthorized("Unauthorized User!");
+            List<Blog> posts = postService.getAllPosts();
+            return Ok(posts);
+            
 
         }
 
         [HttpGet("{id}")]
         public async Task<ActionResult<Blog>> GetPostById(string id)
         {
+            if (userService.ValidateUser(Request.Headers["Authorization"].ToString())==null)
+                return Unauthorized("Unauthorized User!");
             try
             {
                 Blog? post = postService.GetPostById(id);
@@ -47,7 +48,7 @@ namespace BlogApi.Controllers
             {
                 Console.WriteLine(e.StackTrace);
             }
-            return null;
+            return NotFound();
         }
 
         [HttpPost]
@@ -55,7 +56,8 @@ namespace BlogApi.Controllers
         {
             Console.WriteLine("Create Post Controller invoked");
 
-            if (!userService.ValidateUser(Request.Headers["Authorization"].ToString())) return Unauthorized("User not Authorized");
+            if (userService.ValidateUser(Request.Headers["Authorization"].ToString())==null)
+                return Unauthorized("User not Authorized");
             try
             {
                 Blog blog = postService.createPost(postDTO);
@@ -74,6 +76,60 @@ namespace BlogApi.Controllers
                 Console.WriteLine(e.StackTrace);
                 return this.StatusCode(500,e.Message);
             }
+        }
+
+        [HttpDelete("{id}")]
+        public async Task<ActionResult<Blog>> DeletePost(string id) {
+            if (userService.ValidateUser(Request.Headers["Authorization"].ToString())==null)
+                return Unauthorized("User not Authorized");
+
+            // Get current user from token
+
+
+            return null;
+        }
+
+        [HttpPost("like/{id}")]
+        public async Task<ActionResult<String>> LikePost(string id)
+        {
+            string userId = userService.ValidateUser(Request.Headers["Authorization"].ToString());
+            if (userId == null)
+                return Unauthorized("User not Authorized");
+
+            try
+            {
+                postService.LikePostById(id, userId);
+                return Ok("Success");
+            }
+            catch(Exception e)
+            {
+                return this.StatusCode(500, e.Message);
+                Console.WriteLine(e.StackTrace);
+            }
+
+            return "Unknown error";
+        }
+
+
+        [HttpPost("unlike/{id}")]
+        public async Task<ActionResult<String>> UnlikePost(string id)
+        {
+            string userId = userService.ValidateUser(Request.Headers["Authorization"].ToString());
+            if (userId == null)
+                return Unauthorized("User not Authorized");
+
+            try
+            {
+                postService.UnlikePostById(id, userId);
+                return Ok("Success");
+            }
+            catch (Exception e)
+            {
+                return this.StatusCode(500, e.Message);
+                Console.WriteLine(e.StackTrace);
+            }
+
+            return "Unknown error";
         }
     }
 }

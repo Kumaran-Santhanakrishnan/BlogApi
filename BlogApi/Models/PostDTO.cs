@@ -6,7 +6,8 @@ namespace BlogApi.Models
         public string? PostId { get; set; }
         public string AuthorId { get; set; }
 		public string Content { get; set; }
-		public bool IsPublic { get; set; }
+		public string Title { get; set; }
+        public bool IsPublic { get; set; }
 
 		public PostDTO()
 		{

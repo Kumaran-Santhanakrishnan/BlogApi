@@ -21,8 +21,17 @@ create table if not exists Post (PostId varchar(100),
     createdAt DateTime DEFAULT current_timestamp,
     isPublic bool,
     primary key(PostId));
+    
+create table if not exists Upvotes (Id varchar(100),
+	actorId varchar(100),
+    PostId varchar(100),
+    createdAt DateTime DEFAULT current_timestamp,
+    primary key(actorId,PostId),
+    foreign key (actorId) REFERENCES user(Id),
+    foreign key (PostId) REFERENCES Post(PostId));
 
 ALTER TABLE auth
 	ADD COLUMN Salt TEXT AFTER Password;
     
-
+ALTER TABLE Post
+	ADD COLUMN title TEXT AFTER AuthorId;
