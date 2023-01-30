@@ -1,12 +1,13 @@
 ﻿using System;
 using BlogApi.Config;
 using BlogApi.Exceptions;
+using BlogApi.Interfaces;
 using BlogApi.Models;
 using MySqlConnector;
 
 namespace BlogApi.Services
 {
-	public class PostService
+	public class PostService : IPostService
 	{
         private readonly DbFactory dbFactory;
         private readonly UserService userService;
@@ -19,8 +20,9 @@ namespace BlogApi.Services
             userService = _userService;
         }
 
-        internal List<Blog> getAllPosts()
+        public List<Blog> getAllPosts()
         {
+
             throw new NotImplementedException();
         }
 
@@ -28,7 +30,7 @@ namespace BlogApi.Services
         {
             if (post == null) throw new InvalidDataException();
 
-            if(post.AuthorId==null || post.Content==null) throw new InvalidDataException();
+            if(post.AuthorId==null || post.Content==null || post.Title==null) throw new InvalidDataException();
 
             if (userService.GetUserById(post.AuthorId) == null) throw new AuthenticationException("Unauthorized");
 
@@ -53,7 +55,7 @@ namespace BlogApi.Services
                 throw new DatabaseException("Unable to create Post!");
             }
             connection.Close();
-            return new BlogApi.Models.Blog()
+            return new Blog()
             {
                id = guid,
                authorId = post.AuthorId,
@@ -61,6 +63,36 @@ namespace BlogApi.Services
                isPublic = post.IsPublic,
                createdTime = DateTime.Now
             };
+        }
+
+        public Blog EditPost(PostDTO post)
+        {
+            if (post == null) throw new InvalidDataException();
+
+            if (post.AuthorId == null || post.Content == null || post.Title==null || post.PostId==null) throw new InvalidDataException();
+
+            if (userService.GetUserById(post.AuthorId) == null) throw new AuthenticationException("Unauthorized");
+
+            MySqlConnection connection = dbFactory.getConnection();
+
+            if (connection.State != System.Data.ConnectionState.Open) connection.Open();
+
+            MySqlCommand command = new MySqlCommand("UPDATE Post SET title=@Title,content=@Content,isPublic=@IsPublic WHERE PostId=@PostId", connection);
+            command.Parameters.AddRange(new[]
+            {
+                new MySqlParameter("@Title",post.Title),
+                new MySqlParameter("@Content",post.Content),
+                new MySqlParameter("@IsPublic",post.IsPublic),
+                new MySqlParameter("@PostId",post.PostId)
+            });
+
+            if (command.ExecuteNonQuery() != 1)
+            {
+                connection.Close();
+                throw new DatabaseException("Unable to Edit Post!");
+            }
+            connection.Close();
+            return GetPostById(post.PostId!)!;
         }
 
         public Blog? GetPostById(string id)
@@ -75,7 +107,7 @@ namespace BlogApi.Services
             var reader = command.ExecuteReader();
             if (reader.Read())
             {
-                return new Blog()
+                Blog blog = new Blog()
                 {
                     id = reader.GetString("PostId"),
                     authorId = reader.GetString("AuthorId"),
@@ -84,8 +116,10 @@ namespace BlogApi.Services
                     createdTime = reader.GetDateTime("createdAt"),
                     isPublic = reader.GetBoolean("isPublic")
                 };
+                connection.Close();
+                return blog;
             }
-
+            connection.Close();
             return null;
 
 
@@ -158,9 +192,102 @@ namespace BlogApi.Services
                 throw new DatabaseException("Unable to Unlike Post!");
             }
 
-
-
             return "success";
+        }
+
+        List<Comments> IPostService.GetCommentsByPostId(string id)
+        {
+
+            throw new NotImplementedException();
+        }
+
+        List<Comments> IPostService.GetRepliesByCommentId(string id)
+        {
+            throw new NotImplementedException();
+        }
+
+        public Comments AddCommentByPostId(CommentDTO comment)
+        {
+
+            if (comment.ActorId == null ||
+                comment.content == null ||
+                comment.PostId == null ||
+                (comment.IsReply == true && comment.ParentId == null) ||
+                (comment.IsReply == false && comment.ParentId != null)) throw new InvalidDataException();
+
+            if (GetPostById(comment.PostId)==null) throw new DatabaseException("Post not Found!");
+
+            MySqlConnection connection = dbFactory.getConnection();
+            if (connection.State != System.Data.ConnectionState.Open) connection.Open();
+            
+            if (comment.ParentId == null)
+            {
+                MySqlCommand command = new MySqlCommand("INSERT INTO Comments (Id,actorId,PostId,content) VALUES (@Id,@actorId,@PostId,@content);", connection);
+                var commentId = Guid.NewGuid().ToString();
+                command.Parameters.AddRange(new[]
+                {
+                    new MySqlParameter("@Id",commentId),
+                    new MySqlParameter("@actorId",comment.ActorId),
+                    new MySqlParameter("@PostId",comment.PostId),
+                    new MySqlParameter("@content",comment.content)
+                });
+
+                if(command.ExecuteNonQuery() != 1)
+                {
+                    connection.Close();
+                    throw new DatabaseException("Unable to add comment!");
+                }
+
+                return new Comments
+                {
+                    id = commentId,
+                    actorId = comment.ActorId,
+                    blogId = comment.PostId,
+                    content = comment.content,
+                    createdTime = DateTime.Now
+                };
+            }
+            else
+            {
+                MySqlCommand command = new MySqlCommand("INSERT INTO Comments (Id,actorId,PostId,content,isReply,parentId) VALUES (@Id,@actorId,@PostId,@content,@isReply,@parentId);", connection);
+                var commentId = Guid.NewGuid().ToString();
+                command.Parameters.AddRange(new[]
+                {
+                    new MySqlParameter("@Id",commentId),
+                    new MySqlParameter("@actorId",comment.ActorId),
+                    new MySqlParameter("@PostId",comment.PostId),
+                    new MySqlParameter("@content",comment.content),
+                    new MySqlParameter("@isReply",comment.IsReply),
+                    new MySqlParameter("@parentId",comment.ParentId)
+                });
+
+                if (command.ExecuteNonQuery() != 1)
+                {
+                    connection.Close();
+                    throw new DatabaseException("Unable to add comment!");
+                }
+
+                return new Comments
+                {
+                    id = commentId,
+                    actorId = comment.ActorId,
+                    blogId = comment.PostId,
+                    content = comment.content,
+                    createdTime = DateTime.Now,
+                    isReply=true,
+                    parentId=comment.ParentId
+                };
+            }
+        }
+
+        Comments IPostService.EditComment(CommentDTO comment)
+        {
+            throw new NotImplementedException();
+        }
+
+        bool IPostService.DeleteCommentById(string id)
+        {
+            throw new NotImplementedException();
         }
     }
 }

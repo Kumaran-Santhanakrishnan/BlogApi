@@ -25,9 +25,11 @@ namespace BlogApi.Config
 
 
                 var connectionString = "SERVER="+server+";DATABASE="+database+";USER="+user+";PASSWORD="+password+";PORT="+port+";";
-				Console.WriteLine(connectionString);
+                var poolConfigString = "Connection Timeout=30;Connection Lifetime=0;Min Pool Size=0;Max Pool Size=50;Pooling=true;";
 
-				mySQlConnection = new MySqlConnection(connectionString);
+                Console.WriteLine(connectionString);
+
+				mySQlConnection = new MySqlConnection(connectionString+poolConfigString);
 
             }
 			return mySQlConnection;

@@ -2,6 +2,7 @@
 using BlogApi.Config;
 using BlogApi.Models;
 using BlogApi.Exceptions;
+using BlogApi.Interfaces;
 using MySqlConnector;
 using System.Security.Cryptography;
 using static System.Net.Mime.MediaTypeNames;
@@ -13,15 +14,13 @@ using System.IdentityModel.Tokens.Jwt;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Mvc;
-using System.Security.Claims;
-using System.Security.Cryptography;
 using Microsoft.IdentityModel.Tokens;
 using System.Text.RegularExpressions;
 using Org.BouncyCastle.Asn1.Ocsp;
 
 namespace BlogApi.Services
 {
-	public class UserService
+	public class UserService : IUserService
 	{
         private readonly DbFactory dbFactory;
         private readonly IConfiguration Configuration;
@@ -41,7 +40,7 @@ namespace BlogApi.Services
 
             if (connection.State != System.Data.ConnectionState.Open) connection.Open();
 
-            MySqlCommand command = new MySqlCommand("SELECT * FROM USER;", connection);
+            MySqlCommand command = new MySqlCommand("SELECT * FROM user;", connection);
 
             var result =  command.ExecuteReader();
 
@@ -69,7 +68,7 @@ namespace BlogApi.Services
             MySqlConnection connection = dbFactory.getConnection();
             if (connection.State != System.Data.ConnectionState.Open) connection.Open();
 
-            MySqlCommand command = new MySqlCommand("SELECT * FROM USER WHERE Id=@Id;", connection);
+            MySqlCommand command = new MySqlCommand("SELECT * FROM user WHERE Id=@Id;", connection);
             command.Parameters.Add(new MySqlParameter("@Id", Id));
             var reader = command.ExecuteReader();
             if (reader.Read())
@@ -88,7 +87,7 @@ namespace BlogApi.Services
             return null;
         }
 
-        public async Task<User> Register(UserDTO userDTO)
+        public User Register(UserDTO userDTO)
         {
             if (userDTO.Email == null || userDTO.Name == null || userDTO.Password == null) throw new AuthenticationException("Missing Credentials");
 
@@ -104,12 +103,10 @@ namespace BlogApi.Services
 
             if (!match.Success) throw new AuthenticationException("Ivalid Password! Password must contain atleast one uppercase character , one lowercase character , one digit and one special character!");
 
-
-
             MySqlConnection connection = dbFactory.getConnection();
             if (connection.State != System.Data.ConnectionState.Open) connection.Open();
 
-            MySqlCommand command = new MySqlCommand("SELECT COUNT(Id) FROM USER WHERE Email=@Email;", connection);
+            MySqlCommand command = new MySqlCommand("SELECT COUNT(Id) FROM user WHERE Email=@Email;", connection);
             MySqlParameter email = new MySqlParameter("@Email", userDTO.Email);
             command.Parameters.Add(email);
             var result = (Int64) command.ExecuteScalar();
@@ -122,7 +119,7 @@ namespace BlogApi.Services
             user.Name = userDTO.Name;
 
 
-            command = new MySqlCommand("INSERT INTO USER (Id,Name,Email) VALUES (@Id,@Name,@Email);",connection);
+            command = new MySqlCommand("INSERT INTO user (Id,Name,Email) VALUES (@Id,@Name,@Email);",connection);
             MySqlParameter Id = new MySqlParameter("@Id", user.Id);
             MySqlParameter name = new MySqlParameter("@Name", userDTO.Name);
             command.Parameters.Add(email);
@@ -135,7 +132,7 @@ namespace BlogApi.Services
                 throw new DatabaseException("Unable to create user!");
             }
 
-            command = new MySqlCommand("INSERT INTO AUTH (UserId,Password,Salt) VALUES (@Id,@Password,@Salt);",connection);
+            command = new MySqlCommand("INSERT INTO auth (UserId,Password,Salt) VALUES (@Id,@Password,@Salt);",connection);
 
             string salt = generateSalt();
             string hashedPassword = hashPassword(userDTO.Password,salt);
@@ -150,7 +147,7 @@ namespace BlogApi.Services
 
             if (command.ExecuteNonQuery() != 1)
             {
-                Console.WriteLine("Problem writing to Auth table");
+                Console.WriteLine("Problem writing to auth table");
                 connection.Close();
                 throw new DatabaseException("Unable to create user!");
             }
@@ -158,7 +155,6 @@ namespace BlogApi.Services
             return user;
         }
 
-        
         public string Login(UserDTO userDTO,HttpResponse Response)
         {
             if (userDTO.Email == null || userDTO.Password == null) throw new AuthenticationException("Missing Credentials");
@@ -178,7 +174,7 @@ namespace BlogApi.Services
             MySqlConnection connection = dbFactory.getConnection();
             if (connection.State != System.Data.ConnectionState.Open) connection.Open();
 
-            MySqlCommand command = new MySqlCommand("SELECT Id FROM USER WHERE Email=@Email;", connection);
+            MySqlCommand command = new MySqlCommand("SELECT Id FROM user WHERE Email=@Email;", connection);
             MySqlParameter email = new MySqlParameter("@Email", userDTO.Email);
             command.Parameters.Add(email);
 
@@ -190,7 +186,7 @@ namespace BlogApi.Services
                 connection.Close();
 
                 connection.Open();
-                command = new MySqlCommand("SELECT Password,Salt FROM Auth WHERE UserId=@Id;", connection);
+                command = new MySqlCommand("SELECT Password,Salt FROM auth WHERE UserId=@Id;", connection);
                 MySqlParameter Id = new MySqlParameter("@Id", userId);
                 command.Parameters.Add(Id);
 
@@ -322,7 +318,6 @@ namespace BlogApi.Services
             return new string(Enumerable.Repeat(chars, (int)random.NextInt64(10,15))
                 .Select(s => s[random.Next(s.Length)]).ToArray());
         }
-
 
     }
 

@@ -131,5 +131,26 @@ namespace BlogApi.Controllers
 
             return "Unknown error";
         }
+
+        [HttpPost("comment")]
+        public async Task<ActionResult<String>> addComment(CommentDTO commentDTO)
+        {
+            string userId = userService.ValidateUser(Request.Headers["Authorization"].ToString());
+            if (userId == null)
+                return Unauthorized("User not Authorized");
+
+            try
+            {
+                postService.AddCommentByPostId(commentDTO);
+                return Ok("Success");
+            }
+            catch (Exception e)
+            {
+                Console.WriteLine(e.Message+e.StackTrace);
+                return this.StatusCode(500, e.Message);
+            }
+
+            return "Unknown error";
+        }
     }
 }

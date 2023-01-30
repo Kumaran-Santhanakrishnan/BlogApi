@@ -1,4 +1,4 @@
-use blog;
+use Blog;
 create table if not exists user (Id varchar(50),
 	Name text,
     Email text,
@@ -29,6 +29,18 @@ create table if not exists Upvotes (Id varchar(100),
     primary key(actorId,PostId),
     foreign key (actorId) REFERENCES user(Id),
     foreign key (PostId) REFERENCES Post(PostId));
+
+create table if not exists Comments (Id varchar(100),
+	actorId varchar(100),
+    PostId varchar(100),
+    createdAt DateTime DEFAULT current_timestamp,
+    content TEXT,
+    isReply BOOLEAN,
+    parentId varchar(100),
+    primary key(Id),
+    foreign key (actorId) REFERENCES user(Id),
+    foreign key (PostId) REFERENCES Post(PostId),
+    Foreign Key (parentId) REFERENCES Comments(Id));
 
 ALTER TABLE auth
 	ADD COLUMN Salt TEXT AFTER Password;

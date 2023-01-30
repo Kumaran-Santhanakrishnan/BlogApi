@@ -44,7 +44,7 @@ namespace BlogApi.Controllers
 
             try
             {
-                User registeredUser = await userService.Register(user);
+                User registeredUser = userService.Register(user);
                 //if (registeredUser == null) return BadRequest
                 return Ok(registeredUser);
             }
